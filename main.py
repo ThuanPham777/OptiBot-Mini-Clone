@@ -47,7 +47,8 @@ def main():
         # Load cache
         if os.path.exists(CACHE_FILE):
             with open(CACHE_FILE, "r") as f:
-                cache = json.load(f)
+                content = f.read().strip()
+                cache = json.loads(content) if content else {}
         else:
             cache = {}
 
@@ -85,7 +86,11 @@ Article URL: {url}
                 continue
 
             # Save markdown file
+            # Remove invalid filename characters for Windows
             slug = title.lower().replace(" ", "-").replace("/", "-")
+            # Remove characters that are invalid in Windows filenames
+            for char in '<>:"|?*':
+                slug = slug.replace(char, "")
             path = f"{DATA_DIR}/{slug}.md"
 
             with open(path, "w", encoding="utf-8") as f:

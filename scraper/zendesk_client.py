@@ -9,7 +9,7 @@ def fetch_articles(base_url: str, fetch_all: bool = False):
 
     Args:
         base_url: Zendesk API endpoint URL
-        fetch_all: If True, fetches ALL articles. If False, fetches minimum 30 (default: False)
+        fetch_all: If True, fetches ALL articles. If False, fetches minimum 60 (default: False)
 
     Returns:
         List of article dictionaries
@@ -30,7 +30,7 @@ def fetch_articles(base_url: str, fetch_all: bool = False):
 
         url = data.get("next_page")
 
-        if not fetch_all and len(articles) >= 30:
+        if not fetch_all and len(articles) >= 60:
             break
 
         page_num += 1

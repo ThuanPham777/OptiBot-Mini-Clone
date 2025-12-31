@@ -9,8 +9,8 @@ Daily ingestion pipeline for OptiSigns support articles using OpenAI Assistants 
 1. **Clone the repository**
 
    ```bash
-   git clone <your-repo-url>
-   cd <repo-name>/src
+   git clone git@github.com:ThuanPham777/OptiBot-Mini-Clone.git
+   cd OptiBot-Mini-Clone
    ```
 
 2. **Install dependencies**

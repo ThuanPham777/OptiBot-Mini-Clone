@@ -2,6 +2,7 @@ from openai import OpenAI
 import os
 import io
 import logging
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def upload_chunks(chunks, base_filename, vector_store_id, old_file_ids=None):
     Returns:
         Tuple of (count, list of new file_ids)
     """
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    client = OpenAI(api_key=Config.OPENAI_API_KEY)
 
     if old_file_ids:
         delete_old_files(client, vector_store_id, old_file_ids)

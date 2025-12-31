@@ -25,6 +25,10 @@ Daily ingestion pipeline for OptiSigns support articles using OpenAI Assistants 
      - `OPENAI_API_KEY`: Your OpenAI API key from platform.openai.com
      - `VECTOR_STORE_ID`: Create a Vector Store in OpenAI and paste the ID
      - `ZENDESK_ARTICLES_URL`: Already set to OptSigns Zendesk API endpoint
+     - `S3_BUCKET_NAME`: Your AWS S3 bucket name
+     - `S3_ACCESS_KEY`: AWS access key ID
+     - `S3_SECRET_KEY`: AWS secret access key
+     - `S3_REGION`: AWS region (default: us-east-1)
 
 ---
 
@@ -37,10 +41,12 @@ python main.py
 The script will:
 
 1. Fetch 30+ articles from OptSigns Zendesk
-2. Convert each to clean Markdown (saved in `storage/data/`)
-3. Detect changes using content hashing
-4. Upload only new/updated articles to OpenAI Vector Store
-5. Log results: Added, Updated, Skipped, Total chunks
+2. Convert each to clean Markdown
+3. Save markdown files to **local** (`storage/markdown/*.md`) and **S3** (`markdown/*.md`)
+4. Load cache from S3 (fallback to local `storage/cache/articles.json`) for change detection
+5. Upload only new/updated articles to OpenAI Vector Store
+6. Save updated cache to both **local** and **S3**
+7. Log results: Added, Updated, Skipped, Total chunks
 
 ---
 
@@ -50,7 +56,14 @@ Build and run:
 
 ```bash
 docker build -t optibot-scraper .
-docker run -e OPENAI_API_KEY=your_key -e VECTOR_STORE_ID=your_id optibot-scraper
+docker run \
+  -e OPENAI_API_KEY=your_key \
+  -e VECTOR_STORE_ID=your_id \
+  -e S3_BUCKET_NAME=your_bucket \
+  -e S3_ACCESS_KEY=your_access_key \
+  -e S3_SECRET_KEY=your_secret_key \
+  -e S3_REGION=us-east-1 \
+  optibot-scraper
 ```
 
 The container runs once and exits with code 0 on success.
@@ -103,12 +116,34 @@ Deployed on **DigitalOcean App Platform** as a scheduled job (runs daily at 2 AM
 - Job shows: articles added/updated/skipped, chunks embedded
 - Automated retries on failure
 
-**Note on Cache Persistence:**
+**Cache Persistence & Storage:**
 
-- **Local:** Cache persists in `storage/articles.json` - only uploads delta
-- **DigitalOcean Jobs:** Stateless containers - cache resets each run
-- **Impact:** All articles re-uploaded daily, but old files are deleted first (no duplicates)
-- **Production Enhancement:** Use DigitalOcean Spaces or managed database for persistent cache
+- **Dual Storage (Local + S3):**
+
+  ```
+  Local: storage/
+  ├── cache/
+  │   └── articles.json      # Cache (hashes, timestamps, file_ids)
+  └── markdown/
+      ├── add-youtube-video.md
+      ├── screen-layout.md
+      └── ...                # All article markdown files
+
+  S3: bucket-name/
+  ├── cache/
+  │   └── articles.json      # Same cache synced to S3
+  └── markdown/
+      ├── add-youtube-video.md
+      ├── screen-layout.md
+      └── ...                # Same markdown files
+  ```
+
+- **Load priority:** S3 first, fallback to local
+- **Save behavior:** Both local and S3 simultaneously
+- **Delta uploads:** Only new/updated articles are uploaded to Vector Store
+- **Old file cleanup:** When articles change, old files are deleted before uploading new ones
+- **Efficient:** Unchanged articles are skipped entirely (no upload, no deletion)
+- **Backup:** All markdown files preserved locally and in S3
 
 ---
 
@@ -141,9 +176,13 @@ You are OptiBot, the customer-support bot for OptiSigns.com.
 
 ### Project Structure
 
+**Local:**
+
 ```
 src/
 ├── main.py                    # Main orchestration pipeline
+├── config.py                  # Centralized configuration
+├── storage_utils.py           # Dual storage (Local + S3)
 ├── scraper/
 │   ├── zendesk_client.py     # Fetch articles from Zendesk API
 │   ├── cleaner.py            # Remove nav/ads from HTML
@@ -152,23 +191,87 @@ src/
 │   ├── chunker.py            # Split markdown by headings
 │   └── uploader.py           # Upload chunks to OpenAI
 ├── storage/
-│   ├── articles.json         # Cache (hashes, timestamps)
-│   └── data/                 # Saved markdown files
+│   ├── cache/
+│   │   └── articles.json     # Local cache
+│   └── markdown/
+│       ├── article-1.md
+│       └── ...               # Local markdown files
 ├── Dockerfile
 ├── requirements.txt
 └── .env.sample
+```
+
+**AWS S3:**
+
+```
+bucket-name/
+├── cache/
+│   └── articles.json         # S3 cache (synced with local)
+└── markdown/
+    ├── article-1.md
+    ├── article-2.md
+    └── ...                   # S3 markdown files (synced with local)
+```
+
+│ ├── zendesk_client.py # Fetch articles from Zendesk API
+│ ├── cleaner.py # Remove nav/ads from HTML
+│ └── markdown.py # Convert HTML to Markdown
+├── vector_store/
+│ ├── chunker.py # Split markdown by headings
+│ └── uploader.py # Upload chunks to OpenAI
+├── storage/ # (Empty - all data in S3)
+├── Dockerfile
+├── requirements.txt
+└── .env.sample
+
+```
+
+**AWS S3:**
+
+```
+
+bucket-name/
+├── cache/
+│ └── articles.json # Cache (hashes, timestamps, file_ids)
+└── markdown/
+├── add-youtube-video.md
+├── screen-layout.md
+└── ... # All article markdown files
+
 ```
 
 ---
 
 ### Deployment Steps (DigitalOcean)
 
-1. Push code to GitHub
-2. Create new App on DigitalOcean Platform
-3. Select "Jobs" component type
-4. Connect GitHub repo
-5. Set environment variables in Settings
-6. Configure schedule: `0 2 * * *` (cron format)
-7. Deploy
+1. **Create AWS S3 Bucket**
+
+   - Create bucket in AWS S3
+   - Generate IAM credentials with S3 read/write access
+
+2. **Push code to GitHub**
+
+3. **Create DigitalOcean App**
+
+   - Create new App on DigitalOcean Platform
+   - Select "Jobs" component type
+   - Connect GitHub repo
+
+4. **Configure Environment Variables**
+
+   - `OPENAI_API_KEY`
+   - `VECTOR_STORE_ID`
+   - `ZENDESK_ARTICLES_URL`
+   - `S3_BUCKET_NAME`
+   - `S3_ACCESS_KEY`
+   - `S3_SECRET_KEY`
+   - `S3_REGION`
+
+5. **Set Schedule**
+
+   - Configure cron: `0 2 * * *` (daily at 2 AM UTC)
+
+6. **Deploy**
 
 ---
+```

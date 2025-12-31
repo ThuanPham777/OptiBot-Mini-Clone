@@ -1,61 +1,33 @@
-import os
 import sys
-import json
 import hashlib
 import logging
-from dotenv import load_dotenv
 
+from config import Config
 from scraper.zendesk_client import fetch_articles
 from scraper.cleaner import clean_html
 from scraper.markdown import html_to_markdown
 from vector_store.chunker import split_by_headings
 from vector_store.uploader import upload_chunks
+from storage_utils import CacheStorage
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-
-ARTICLES_URL = os.getenv("ZENDESK_ARTICLES_URL")
-VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID")
-
-CACHE_FILE = "storage/articles.json"
-DATA_DIR = "storage/data"
-
 def main():
     """Main pipeline for scraping and uploading OptiSigns articles."""
     try:
-        # Validate environment variables
-        if not ARTICLES_URL:
-            logger.error("ZENDESK_ARTICLES_URL not set in .env")
-            sys.exit(1)
+        Config.validate()
 
-        if not VECTOR_STORE_ID:
-            logger.error("VECTOR_STORE_ID not set in .env")
-            sys.exit(1)
-
-        if not os.getenv("OPENAI_API_KEY"):
-            logger.error("OPENAI_API_KEY not set in .env")
-            sys.exit(1)
-
-        os.makedirs(DATA_DIR, exist_ok=True)
-
-        # Load cache
-        if os.path.exists(CACHE_FILE):
-            with open(CACHE_FILE, "r") as f:
-                content = f.read().strip()
-                cache = json.loads(content) if content else {}
-        else:
-            cache = {}
+        cache_storage = CacheStorage()
+        cache = cache_storage.load()
 
         added = updated = skipped = total_chunks = 0
 
         logger.info("Fetching articles from Zendesk...")
-        articles = fetch_articles(ARTICLES_URL, fetch_all=False)
+        articles = fetch_articles(Config.ZENDESK_ARTICLES_URL, fetch_all=False)
         logger.info(f"Fetched {len(articles)} articles")
 
         for idx, article in enumerate(articles, 1):
@@ -85,23 +57,18 @@ Article URL: {url}
                 skipped += 1
                 continue
 
-            # Save markdown file
             slug = title.lower().replace(" ", "-").replace("/", "-")
-            # Remove characters that are invalid in Windows filenames
             for char in '<>:"|?*':
                 slug = slug.replace(char, "")
 
-            path = f"{DATA_DIR}/{slug}.md"
+            # Save markdown to S3
+            cache_storage.save_markdown(f"{slug}.md", md_full)
 
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(md_full)
-
-            # Chunk and upload to vector store
             chunks = split_by_headings(md_full)
             logger.info(f"  Created {len(chunks)} chunks")
 
             old_file_ids = old.get("file_ids", []) if old else None
-            uploaded, new_file_ids = upload_chunks(chunks, slug, VECTOR_STORE_ID, old_file_ids)
+            uploaded, new_file_ids = upload_chunks(chunks, slug, Config.VECTOR_STORE_ID, old_file_ids)
             total_chunks += uploaded
             logger.info(f"  Uploaded {uploaded} chunks to vector store")
 
@@ -119,11 +86,8 @@ Article URL: {url}
                 added += 1
                 logger.info(f"  Added: {title}")
 
-        # Save cache
-        with open(CACHE_FILE, "w") as f:
-            json.dump(cache, f, indent=2)
+        cache_storage.save(cache)
 
-        # Final summary
         logger.info("=" * 60)
         logger.info(f"Summary:")
         logger.info(f"  Added: {added}")

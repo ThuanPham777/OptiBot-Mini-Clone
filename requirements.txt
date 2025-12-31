@@ -4,3 +4,4 @@ markdownify
 python-dotenv
 openai
 tiktoken
+boto3

@@ -36,8 +36,14 @@ Thumbs.db
 # =========================
 # Project-specific
 # =========================
-storage/articles.json
-storage/data/
+# Ignore all storage content but keep folder structure
+storage/cache/*.json
+storage/markdown/*.md
+storage/markdown/*.txt
+
+# Keep .gitkeep files to preserve folder structure
+!storage/cache/.gitkeep
+!storage/markdown/.gitkeep
 
 # =========================
 # Docker

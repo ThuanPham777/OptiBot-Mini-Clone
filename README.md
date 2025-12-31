@@ -40,7 +40,7 @@ python main.py
 
 The script will:
 
-1. Fetch 30+ articles from OptSigns Zendesk
+1. Fetch 60+ articles from OptSigns Zendesk
 2. Convert each to clean Markdown
 3. Save markdown files to **local** (`storage/markdown/*.md`) and **S3** (`markdown/*.md`)
 4. Load cache from S3 (fallback to local `storage/cache/articles.json`) for change detection
@@ -213,32 +213,17 @@ bucket-name/
     └── ...                   # S3 markdown files (synced with local)
 ```
 
-│ ├── zendesk_client.py # Fetch articles from Zendesk API
-│ ├── cleaner.py # Remove nav/ads from HTML
-│ └── markdown.py # Convert HTML to Markdown
-├── vector_store/
-│ ├── chunker.py # Split markdown by headings
-│ └── uploader.py # Upload chunks to OpenAI
-├── storage/ # (Empty - all data in S3)
-├── Dockerfile
-├── requirements.txt
-└── .env.sample
+---
 
-```
+### Daily Job Logs
 
-**AWS S3:**
+**Live Logs Link:**
 
-```
+- [DigitalOcean Job Deployment Logs](https://cloud.digitalocean.com/apps/ab52efdb-f6b0-4581-8ea4-9b79bcb3f3c0/deployments/46b424c9-35ea-4615-be93-6c50f2347297?i=dbf8e2)
 
-bucket-name/
-├── cache/
-│ └── articles.json # Cache (hashes, timestamps, file_ids)
-└── markdown/
-├── add-youtube-video.md
-├── screen-layout.md
-└── ... # All article markdown files
+**Backup Screenshot (if link is not accessible):**
 
-```
+- [Google Drive Screenshot](https://drive.google.com/file/d/1SW1-Q7SJdmHofkS2m8Pb6ZBOH2r7aZUc/view?usp=sharing)
 
 ---
 
@@ -274,4 +259,7 @@ bucket-name/
 6. **Deploy**
 
 ---
+
+```
+
 ```

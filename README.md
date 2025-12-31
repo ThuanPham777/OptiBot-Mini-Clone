@@ -59,20 +59,37 @@ The container runs once and exits with code 0 on success.
 
 ### Chunking Strategy
 
-**Semantic Heading-Based Chunking**:
+**Semantic Heading-Based Chunking with Citation Preservation**:
 
-- Markdown is split at `## ` (H2 headings) for semantic coherence
-- Each section maintains context with its heading
-- Large sections are split into 500-token chunks with 50-token overlap
-- Optimized for support articles where headings represent logical topics
-- Preserves question/answer structure typical in help documentation
+- Each chunk includes **Title + "Article URL:"** at the beginning for proper citations
+- Splits at `## ` or `### ` headings for semantic coherence
+- Articles without headings are kept as single chunks (up to 800 tokens)
+- Large sections are split into 800-token chunks with 100-token overlap
+- Separator `---` added between header and content for clarity
 
 **Why this approach?**
 
-- Support articles are naturally structured by topics
-- Headings provide semantic boundaries
-- Better retrieval accuracy vs. arbitrary length splits
-- Maintains context within each chunk
+- **Citations work**: Every chunk has "Article URL:" so Assistant can cite sources (system prompt requirement)
+- **Semantic coherence**: Headings represent logical topics in support docs
+- **Context preservation**: Each chunk is self-contained with article identity
+- **Better retrieval**: Heading-based splits maintain question/answer structure
+- **Flexible**: Handles articles with `##`, `###`, or no headings at all
+
+**Example chunk format**:
+
+```markdown
+# Accepted Payment Methods
+
+Article URL: https://support.optisigns.com/hc/en-us/articles/...
+
+---
+
+### How to initiate the Purchase Order process:
+
+[content...]
+```
+
+This ensures the system prompt requirement: **"Cite up to 3 'Article URL:' lines per reply"** works correctly.
 
 ---
 
@@ -85,6 +102,13 @@ Deployed on **DigitalOcean App Platform** as a scheduled job (runs daily at 2 AM
 - View logs: [DigitalOcean Dashboard](https://cloud.digitalocean.com/apps) → Jobs → optibot-scraper → Logs
 - Job shows: articles added/updated/skipped, chunks embedded
 - Automated retries on failure
+
+**Note on Cache Persistence:**
+
+- **Local:** Cache persists in `storage/articles.json` - only uploads delta
+- **DigitalOcean Jobs:** Stateless containers - cache resets each run
+- **Impact:** All articles re-uploaded daily, but old files are deleted first (no duplicates)
+- **Production Enhancement:** Use DigitalOcean Spaces or managed database for persistent cache
 
 ---
 
@@ -100,10 +124,18 @@ You are OptiBot, the customer-support bot for OptiSigns.com.
 • Cite up to 3 "Article URL:" lines per reply.
 ```
 
-**Test Question**: "How do I add a YouTube video?"
+**Test Questions with Screenshots:**
 
-- Screenshot: [See `screenshots/playground-test.png`]
-- Shows correct answer with cited article URLs
+1. **"How to create a video wall with OptiSigns?"**
+
+   - Screenshot: https://drive.google.com/file/d/1EjwxLNy7g8ZP_9yK2JHSHDYWMDOytnPw/view?usp=sharing
+
+2. **"How do I set up background music on my digital signs?"**
+
+   - Screenshot: https://drive.google.com/file/d/1i67iZyISkYJGVIwaM4A4E64LHBtxUvXc/view?usp=sharing
+
+3. **"How can I display PowerBI dashboards on my screens?"**
+   - Screenshot: https://drive.google.com/file/d/1Z9Br9FaNQQtAh5MWeI4IzD3woH38oeTV/view?usp=sharing
 
 ---
 
@@ -140,23 +172,3 @@ src/
 7. Deploy
 
 ---
-
-### Sample Output
-
-```
-2025-12-29 14:23:01 - INFO - Fetching articles from Zendesk...
-2025-12-29 14:23:03 - INFO - Fetched 35 articles
-2025-12-29 14:23:04 - INFO - Processing article 1/35: Getting Started with OptiSigns
-2025-12-29 14:23:04 - INFO -   Created 4 chunks
-2025-12-29 14:23:06 - INFO -   Uploaded 4 chunks to vector store
-2025-12-29 14:23:06 - INFO -   Added: Getting Started with OptiSigns
-...
-============================================================
-Summary:
-  Added: 5
-  Updated: 2
-  Skipped: 28
-  Total articles processed: 35
-  Embedded chunks: 87
-============================================================
-```

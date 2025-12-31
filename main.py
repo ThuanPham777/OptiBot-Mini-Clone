@@ -55,7 +55,7 @@ def main():
         added = updated = skipped = total_chunks = 0
 
         logger.info("Fetching articles from Zendesk...")
-        articles = fetch_articles(ARTICLES_URL)
+        articles = fetch_articles(ARTICLES_URL, fetch_all=False)
         logger.info(f"Fetched {len(articles)} articles")
 
         for idx, article in enumerate(articles, 1):
@@ -86,11 +86,11 @@ Article URL: {url}
                 continue
 
             # Save markdown file
-            # Remove invalid filename characters for Windows
             slug = title.lower().replace(" ", "-").replace("/", "-")
             # Remove characters that are invalid in Windows filenames
             for char in '<>:"|?*':
                 slug = slug.replace(char, "")
+
             path = f"{DATA_DIR}/{slug}.md"
 
             with open(path, "w", encoding="utf-8") as f:
@@ -100,14 +100,16 @@ Article URL: {url}
             chunks = split_by_headings(md_full)
             logger.info(f"  Created {len(chunks)} chunks")
 
-            uploaded = upload_chunks(chunks, slug, VECTOR_STORE_ID)
+            old_file_ids = old.get("file_ids", []) if old else None
+            uploaded, new_file_ids = upload_chunks(chunks, slug, VECTOR_STORE_ID, old_file_ids)
             total_chunks += uploaded
             logger.info(f"  Uploaded {uploaded} chunks to vector store")
 
             # Update cache
             cache[article_id] = {
                 "hash": content_hash,
-                "updated_at": article.get("updated_at", "")
+                "updated_at": article.get("updated_at", ""),
+                "file_ids": new_file_ids
             }
 
             if old:
